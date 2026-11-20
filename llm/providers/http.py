@@ -15,6 +15,7 @@ import time
 import requests
 
 from core.scrub import redact_secrets
+from llm.providers import spend
 from llm.providers.base import LLMError, ProviderSpec
 
 TIMEOUT = 120
@@ -56,6 +57,7 @@ def send(
     """Make one request (with bounded retries) and return the JSON body."""
     url = spec.base_url.rstrip("/") + path
     headers = {**auth_headers(spec, key), **spec.extra_headers()}
+    pending = spend.check(method, json_body)  # local spending limit; no-op outside CloudBackend
     error: LLMError | None = None
     for attempt in range(1, ATTEMPTS + 1):
         wait = 2.0 * attempt
@@ -74,6 +76,7 @@ def send(
             body = _body(response)
             status = response.status_code
             if status < 300 and not _error_in(body):
+                spend.record(pending, body)
                 return body if isinstance(body, dict) else {"data": body}
             if status < 300:
                 # OpenRouter can answer 200 with only an error object once a

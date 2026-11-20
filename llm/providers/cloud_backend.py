@@ -1,7 +1,7 @@
 """An LLMBackend that runs on the user's own key with a cloud provider."""
 
 from llm.base import ChatTurn, LLMBackend
-from llm.providers import keys
+from llm.providers import keys, spend
 from llm.providers.adapters import adapter_for
 from llm.providers.base import LLMError, ProviderSpec
 
@@ -28,15 +28,17 @@ class CloudBackend(LLMBackend):
     def generate(self, prompt: str, *, json_mode: bool = False, schema: dict | None = None) -> str:
         spec, key = self._keyed()
         try:
-            return self._adapter.generate(spec, key, self.model, prompt,
-                                          json_mode=json_mode, schema=schema)
+            with spend.guard(self.data_dir, self.spec.id, self.model):
+                return self._adapter.generate(spec, key, self.model, prompt,
+                                              json_mode=json_mode, schema=schema)
         except LLMError as e:
             raise self._said_plainly(e) from e
 
     def chat(self, messages: list[dict], tools: list[dict]) -> ChatTurn:
         spec, key = self._keyed()
         try:
-            return self._adapter.chat(spec, key, self.model, messages, tools)
+            with spend.guard(self.data_dir, self.spec.id, self.model):
+                return self._adapter.chat(spec, key, self.model, messages, tools)
         except LLMError as e:
             raise self._said_plainly(e) from e
 
